@@ -26,44 +26,38 @@ This analysis is based on a combination of real-world datasets, including simula
 Insight Generation – Drawing actionable conclusions to support business strategy and operations.
 
 
-> __Note__: Note: All data used in this project has been anonymized or sourced from publicly available datasets. The focus is on demonstrating analytical methodology and business application rather than building a production-ready solution.
+> __Note__: All data used in this project has been anonymized or sourced from publicly available datasets. The focus is on demonstrating analytical methodology and business application rather than building a production-ready solution.
 
 ---
 
 ## 🧮 Data Dictionary
 
-This project has N different tables.
+This project has a database of information on taxi rides in Chicago with 4 different tables.
 
-- `dataset.csv` (describe content)
-    `column:name`: description.
+- `neighborhoods` (data about the city's neighborhoods)
+    `name`: neighborhood name
+    `neighborhood_id`: neighborhood code
 
-A database with information about taxi trips in Chicago:
+- `cabs` (data about taxis)
+    `cab_id`: vehicle code
+    `vehicle_id`: vehicle's technical ID
+    `company_name`: the company that owns the vehicle
 
-neighborhoods table: data about the city's neighborhoods
+- `trips` (data about trips)
+    `trip_id`: trip code
+    `cab_id`: code of the vehicle operating the trip
+    `start_ts`: trip start date and time (rounded to the nearest hour)
+    `end_ts`: trip end date and time (rounded to the nearest hour)
+    `duration_seconds`: trip duration in seconds
+    `distance_miles`: trip distance in miles
+    `pickup_location_id`: pickup neighborhood code
+    `dropoff_location_id`: dropoff neighborhood code
 
-name: neighborhood name
-neighborhood_id: neighborhood code
-cabs table: data about taxis
-
-cab_id: vehicle code
-vehicle_id: vehicle's technical ID
-company_name: the company that owns the vehicle
-trips table: data about trips
-
-trip_id: trip code
-cab_id: code of the vehicle operating the trip
-start_ts: trip start date and time (rounded to the nearest hour)
-end_ts: trip end date and time (rounded to the nearest hour)
-duration_seconds: trip duration in seconds
-distance_miles: trip distance in miles
-pickup_location_id: pickup neighborhood code
-dropoff_location_id: dropoff neighborhood code
-weather_records table: weather data
-
-record_id: weather record code
-ts: Date and time of recording (rounded to the nearest hour)
-Temperature: Temperature when the recording was taken
-Description: Brief description of the weather conditions, e.g., "light rain" or "partly cloudy"
+- `weather_records` (weather data)
+    `record_id`: weather record code
+    `ts`: Date and time of recording (rounded to the nearest hour)
+    `temperature`: Temperature when the recording was taken
+    `description`: Brief description of the weather conditions, e.g., "light rain" or "partly cloudy"
 
 ---
 
@@ -110,10 +104,10 @@ The notebook `00-guided-analysis_foundations.ipynb` reflects an early stage of m
 🛠️ Tools & Libraries
 
 - Python 3.11
-- os, pathlib, sys, pandas, NumPy, Matplotlib, seaborn, IPython.display, scipy.stats
+- os, pathlib, sys, pandas, NumPy, Matplotlib, seaborn, IPython.display, scipy.stats 
 - Jupyter Notebook
+- Postgre
 - Git & GitHub for version control
--
 
 ---
 

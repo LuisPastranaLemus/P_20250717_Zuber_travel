@@ -1,19 +1,32 @@
 # 🧭 Project Analysis
-Brief Decription
+
+Data-Driven Insights for Zuber: Understanding Ride-Sharing Patterns in Chicago
 
 ---
 
 ## 🔍 Project Overview (P-202YMMDD_Name)
 
-Project Overview
+This project was developed as part of a data analysis initiative for Zuber, a new ride-sharing company launching operations in Chicago. The main objective is to identify key trends, passenger behavior, and external factors that influence ride demand.
 
 Key questions:
 
-- Objectives to reach
+- How do passengers typically use ride-sharing services?
+- What patterns or trends exist in ride frequency, location, or time of day?
+- How does weather affect the number of trips taken?
+- What insights can we gain from competitor data to position Zuber effectively in the market?
 
 Project Info explanation
 
-__Note__: key info
+This analysis is based on a combination of real-world datasets, including simulated ride logs and open-source weather data from the Chicago area. The project follows a structured approach:
+
+1. Data Acquisition – Loading and cleaning the dataset(s) using Python and SQL.
+2. Exploratory Data Analysis (EDA) – Visualizing trends, correlations, and usage patterns.
+3. Hypothesis Testing – Evaluating the impact of external variables like weather conditions on ride frequency.
+
+Insight Generation – Drawing actionable conclusions to support business strategy and operations.
+
+
+> __Note__: Note: All data used in this project has been anonymized or sourced from publicly available datasets. The focus is on demonstrating analytical methodology and business application rather than building a production-ready solution.
 
 ---
 
@@ -24,6 +37,33 @@ This project has N different tables.
 - `dataset.csv` (describe content)
     `column:name`: description.
 
+A database with information about taxi trips in Chicago:
+
+neighborhoods table: data about the city's neighborhoods
+
+name: neighborhood name
+neighborhood_id: neighborhood code
+cabs table: data about taxis
+
+cab_id: vehicle code
+vehicle_id: vehicle's technical ID
+company_name: the company that owns the vehicle
+trips table: data about trips
+
+trip_id: trip code
+cab_id: code of the vehicle operating the trip
+start_ts: trip start date and time (rounded to the nearest hour)
+end_ts: trip end date and time (rounded to the nearest hour)
+duration_seconds: trip duration in seconds
+distance_miles: trip distance in miles
+pickup_location_id: pickup neighborhood code
+dropoff_location_id: dropoff neighborhood code
+weather_records table: weather data
+
+record_id: weather record code
+ts: Date and time of recording (rounded to the nearest hour)
+Temperature: Temperature when the recording was taken
+Description: Brief description of the weather conditions, e.g., "light rain" or "partly cloudy"
 
 ---
 

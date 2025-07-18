@@ -1,0 +1,29 @@
+{
+    "sqltools.connections": [
+        {
+            "oracleOptions": {
+                "privilege": "Normal",
+                "thickMode": false,
+                "autoCommit": false,
+                "lowerCase": false,
+                "limitPrefetchRows": false
+            },
+            "previewLimit": 50,
+            "name": "Oracle23ai_Docker",
+            "driver": "Oracle",
+            "username": "LUIS",
+            "password": "P45tr4n4L3mu5",
+            "connectString": "127.0.0.1:1521/FREEPDB1"
+        },
+        {
+            "previewLimit": 50,
+            "server": "localhost",
+            "port": 5432,
+            "driver": "PostgreSQL",
+            "name": "PostgreSQL_Suse",
+            "database": "dataanalysis",
+            "username": "luis",
+            "password": "P45tr4n4L3mu5"
+        }
+    ]
+}

@@ -5,6 +5,8 @@ import pandas as pd
 import numpy as np
 import seaborn as sns
 from matplotlib import pyplot as plt
+from scipy.stats import t, laplace, norm, shapiro
+import scipy.stats as stats
 
 
 # Function to detect outlier boundaries with optional clamping of lower bound to zero
@@ -89,6 +91,44 @@ def evaluate_central_trend(df, column):
         display(HTML("> High variability: <i>mean may be misleading</i>. Recommended central measure: <b>median</b>."))
     
     print()
+
+# function in order to select the correct bins calculation
+# bins = calculate_bins(df['total_spent'], method='fd')
+def calculate_bins(data, method='fd'):
+    """
+    Calculate optimal number of histogram bins using a selected method.
+
+    Parameters:
+    - data (array-like): Input data for which to calculate bins.
+    - method (str): Method for calculating bins. Options:
+        'sturges', 'sqrt', 'fd' (Freedman–Diaconis), 'rice', 'auto'
+
+    Returns:
+    - int: Number of bins.
+    """
+    data = np.asarray(data.dropna())  # ensure no NaNs
+
+    n = len(data)
+    if n == 0:
+        raise ValueError("Data must contain at least one non-NaN value.")
+
+    if method == 'sturges':
+        return int(np.ceil(np.log2(n) + 1))
+    elif method == 'sqrt':
+        return int(np.sqrt(n))
+    elif method == 'rice':
+        return int(2 * n ** (1/3))
+    elif method == 'fd':
+        q75, q25 = np.percentile(data, [75, 25])
+        iqr = q75 - q25
+        bin_width = 2 * iqr / n ** (1/3)
+        return int((data.max() - data.min()) / bin_width)
+    elif method == 'auto':
+        # matplotlib can handle 'auto' directly
+        return 'auto'
+    else:
+        raise ValueError(f"Unknown method '{method}'. Choose from 'sturges', 'sqrt', 'fd', 'rice', 'auto'.")
+
 
 # Function to evaluate pairwise correlations among numerical columns
 def evaluate_correlation(df):
@@ -862,66 +902,185 @@ def plot_bar_comp(df, x_col, y_col, title, xlabel, ylabel, color1='black', color
     plt.tight_layout()
     plt.show()
 
-# Plots a frequency density histogram with KDE, showing distribution shape and key statistics.
+# Plots a frequency density histogram with KDE, showing distribution shape and key statistics for sample lower than 5000. 
+# Distribution diagnostics: skewness, kurtosis, normality, with Shapiro - Wilk  for test normality
 # Highlights mean, median, ±1σ, ±2σ, ±3σ boundaries, and marks outliers beyond 3σ.
-# plot_distribution_with_statistics(df, 'sales', bins=10)
-def plot_distribution_dispersion(data, column_name, bins=30, color='grey'):
+# plot_distribution_dispersion(df, 'total_spent', bins='sturges', color='skyblue') 
+def plot_distribution_dispersion_sl5000(data, column_name, bins='fd', rug=True, color='grey'):
     """
-    Plot a frequency density histogram with KDE and key distribution statistics.
+    Plot a frequency density histogram with KDE, sigma bands, and statistical insights.
 
     Parameters:
-    - data: DataFrame containing the data.
-    - column_name: Name of the column to analyze.
-    - bins: Number of bins for the histogram.
-    - color: Base color for histogram and KDE (default: 'skyblue').
+    - data: DataFrame with the column to analyze.
+    - column_name: Name of the column to visualize.
+    - bins: Number of bins or method name ('sturges', 'sqrt', 'fd', 'rice', 'auto').
+    - rug: Whether to display a rugplot (default: True).
+    - color: Histogram base color (default: 'grey').
 
     Displays:
-    - Histogram (frequency density) with KDE.
-    - Mean, median lines.
-    - ±1σ, ±2σ, ±3σ boundaries.
-    - Outliers marked beyond 3σ.
+    - Histogram with KDE.
+    - Mean, median, ±1σ, ±2σ, ±3σ lines.
+    - Outliers beyond 3σ.
+    - Distribution diagnostics: skewness, kurtosis, normality.
     """
-    
+
     values = data[column_name].dropna()
 
-    # Basic stats
+    if isinstance(bins, str):
+        method_used = bins
+        bins = calculate_bins(values, method=method_used)
+        print(f'✅ Using {bins} bins calculated by the method "{method_used}"')
+
+    # Statistics
     mean = values.mean()
     median = values.median()
     std = values.std()
+    skewness = values.skew()
+    kurtosis = values.kurt()
 
-    # Sigma boundaries
+    # Normality test
+    stat, p = shapiro(values)
+    is_normal = p >= 0.05
+
+    # Visual styles
+    kde_color = 'blue' if is_normal else 'darkred'
+    mean_line_style = '--' if is_normal else '-.'
+    sigma_colors = ['green', 'blue', 'purple']
+
     sigma_bounds = {
         '1σ': (mean - std, mean + std),
         '2σ': (mean - 2*std, mean + 2*std),
         '3σ': (mean - 3*std, mean + 3*std)
     }
 
+    # Plot
     plt.figure(figsize=(15, 7))
 
-    # Frequency density histogram with KDE
-    sns.histplot(values, bins=bins, kde=True, stat='density',
+    # Histogram (no internal KDE)
+    sns.histplot(values, bins=bins, kde=False, stat='density',
                  color=color, edgecolor='black', alpha=0.6)
 
+    # manual KDE (color)
+    sns.kdeplot(values, color=kde_color, linewidth=2)
+
+    if rug:
+        sns.rugplot(values, color='black', alpha=0.15)
+
     # Mean and median
-    plt.axvline(mean, color='red', linestyle='--', linewidth=2, label=f'Mean: {mean:.2f}')
+    plt.axvline(mean, color='red', linestyle=mean_line_style, linewidth=2, label=f'Mean: {mean:.2f}')
     plt.axvline(median, color='orange', linestyle=':', linewidth=2, label=f'Median: {median:.2f}')
 
-    # Sigma boundaries
-    colors = ['green', 'blue', 'purple']
+    # standard deviation lines
     for i, (label, (low, high)) in enumerate(sigma_bounds.items()):
-        plt.axvline(low, color=colors[i], linestyle='--', alpha=0.7, label=f'{label} Lower: {low:.2f}')
-        plt.axvline(high, color=colors[i], linestyle='--', alpha=0.7, label=f'{label} Upper: {high:.2f}')
-    
-    # Outliers (beyond 3σ)
+        plt.axvline(low, color=sigma_colors[i], linestyle='--', alpha=0.7, label=f'{label} Lower: {low:.2f}')
+        plt.axvline(high, color=sigma_colors[i], linestyle='--', alpha=0.7, label=f'{label} Upper: {high:.2f}')
+
+    # Outliers ±3σ
     outliers = values[(values < sigma_bounds['3σ'][0]) | (values > sigma_bounds['3σ'][1])]
     if not outliers.empty:
         plt.scatter(outliers, np.zeros_like(outliers), color='black', s=40, label='Outliers (3σ+)', marker='x')
 
-    plt.title(f'Distribution of {column_name} with Statistical Boundaries')
+    # Title with diagnostics
+    dist_label = 'Normal' if is_normal else 'Not Normal'
+    plt.title(
+        f'Distribution of {column_name} ({dist_label} | Skew={skewness:.2f}, Kurtosis={kurtosis:.2f}, Shapiro p={p:.4f})',
+        fontsize=14
+    )
     plt.xlabel(column_name)
     plt.ylabel('Frequency Density')
-    plt.legend()
     plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+# Plots a frequency density histogram with KDE, showing distribution shape and key statistics for sample greater than 5000. 
+# Distribution diagnostics: skewness, kurtosis, normality, with prctic heuristics (skweness, kurtosis) for test normality
+# Highlights mean, median, ±1σ, ±2σ, ±3σ boundaries, and marks outliers beyond 3σ.
+# plot_distribution_dispersion(df, 'total_spent', bins='sturges', color='skyblue') 
+def plot_distribution_dispersion_sg5000(data, column_name, bins='fd', rug=True, color='grey'):
+    """
+    Plot a frequency density histogram with KDE, sigma bands, and statistical insights.
+    Optimized for large datasets (N > 5000), with heuristic detection of normality (no Shapiro).
+
+    Parameters:
+    - data: DataFrame with the column to analyze.
+    - column_name: Name of the column to visualize.
+    - bins: Number of bins or binning method ('sturges', 'sqrt', 'fd', 'rice', 'auto').
+    - rug: Whether to display a rugplot (default: False).
+    - color: Histogram base color (default: 'grey').
+
+    Displays:
+    - Histogram with KDE.
+    - Mean, median, ±1σ, ±2σ, ±3σ lines.
+    - Outliers beyond 3σ.
+    - Title includes skew, kurtosis, sample size and inferred normality.
+    """
+
+    values = data[column_name].dropna()
+
+    if isinstance(bins, str):
+        method_used = bins
+        bins = calculate_bins(values, method=method_used)
+        print(f'✅ Usando {bins} bins calculados con el método "{method_used}"')
+
+    # Estadísticas
+    mean = values.mean()
+    median = values.median()
+    std = values.std()
+    skewness = values.skew()
+    kurtosis = values.kurt()
+
+    # Heurística de normalidad
+    is_normal_like = abs(skewness) < 0.5 and abs(kurtosis) < 1
+
+    kde_color = 'darkblue' if is_normal_like else 'darkred'
+    mean_line_style = '--' if is_normal_like else '-.'
+    sigma_colors = ['green', 'blue', 'purple']
+    normality_label = "Normal" if is_normal_like else "Not Normal"
+
+    sigma_bounds = {
+        '1σ': (mean - std, mean + std),
+        '2σ': (mean - 2*std, mean + 2*std),
+        '3σ': (mean - 3*std, mean + 3*std)
+    }
+
+    # Plot
+    plt.figure(figsize=(15, 7))
+
+    # Histograma
+    sns.histplot(values, bins=bins, kde=False, stat='density',
+                 color=color, edgecolor='black', alpha=0.6)
+
+    # KDE
+    sns.kdeplot(values, color=kde_color, linewidth=2)
+
+    # Rugplot (opcional y limitado)
+    if rug and len(values) <= 50000:
+        sns.rugplot(values, color='black', alpha=0.15)
+
+    # Líneas de media y mediana
+    plt.axvline(mean, color='red', linestyle=mean_line_style, linewidth=2, label=f'Mean: {mean:.2f}')
+    plt.axvline(median, color='orange', linestyle=':', linewidth=2, label=f'Median: {median:.2f}')
+
+    # Líneas sigma
+    for i, (label, (low, high)) in enumerate(sigma_bounds.items()):
+        plt.axvline(low, color=sigma_colors[i], linestyle='--', alpha=0.7, label=f'{label} Lower: {low:.2f}')
+        plt.axvline(high, color=sigma_colors[i], linestyle='--', alpha=0.7, label=f'{label} Upper: {high:.2f}')
+
+    # Outliers
+    outliers = values[(values < sigma_bounds['3σ'][0]) | (values > sigma_bounds['3σ'][1])]
+    if not outliers.empty:
+        plt.scatter(outliers, np.zeros_like(outliers), color='black', s=40, label='Outliers (3σ+)', marker='x')
+
+    # Título final
+    plt.title(
+        f'Distribution of {column_name} ({normality_label} | Skew={skewness:.2f}, Kurtosis={kurtosis:.2f}, N={len(values)})',
+        fontsize=14
+    )
+    plt.xlabel(column_name)
+    plt.ylabel('Frequency Density')
+    plt.grid(True)
+    plt.legend()
     plt.tight_layout()
     plt.show()
 
@@ -1021,6 +1180,186 @@ def plot_horizontal_lines(df, start_col='', end_col='', y_col='', title='', xlab
     plt.tight_layout()
     plt.show()
 
+# Plots Quantile to Quantile graph
+# plot_qq_normality_tests(df, 'column_name')
+def plot_qq_normality_tests(data, column, dist='norm', dist_params=None,
+                                  line='45', title=None, figsize=(8, 6), color='grey',
+                                  outlier_color='black', outlier_marker='x'):
+    """
+    Generate a QQ plot comparing the quantiles of a sample against a theoretical distribution.
+    Outliers are detected using the IQR method and highlighted with custom color and marker.
+    Also performs normality tests and displays the results.
+
+    Parameters:
+    - data: pd.DataFrame – The dataset containing the column to analyze.
+    - column: str – The column name to analyze.
+    - dist: str or scipy.stats distribution – The distribution to compare against (default: 'norm').
+    - dist_params: tuple – Parameters required for the theoretical distribution (shape, loc, scale).
+    - line: str – Reference line type for QQ plot.
+    - title: str – Plot title.
+    - figsize: tuple – Size of the figure.
+    - color: str – Color of the main data points.
+    - outlier_color: str – Color of the outlier points.
+    - outlier_marker: str – Marker style for outliers.
+    
+    """
+
+    # Drop NA values
+    values = data[column].dropna().values
+    n = len(values)
+
+    # Determine theoretical distribution
+    dist_obj = getattr(stats, dist) if isinstance(dist, str) else dist
+
+    # Generate QQ plot data
+    if dist_params is not None:
+        (osm, osr), (slope, intercept, r) = stats.probplot(values, dist=dist_obj, sparams=dist_params)
+    else:
+        (osm, osr), (slope, intercept, r) = stats.probplot(values, dist=dist_obj)
+
+    # Detect outliers using IQR method on sample quantiles
+    Q1 = np.percentile(osr, 25)
+    Q3 = np.percentile(osr, 75)
+    IQR = Q3 - Q1
+    lower_bound = Q1 - 1.5 * IQR
+    upper_bound = Q3 + 1.5 * IQR
+    outlier_mask = (osr < lower_bound) | (osr > upper_bound)
+
+    # Plotting
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.scatter(osm[~outlier_mask], osr[~outlier_mask], color=color, label='Data', marker='o')
+    ax.scatter(osm[outlier_mask], osr[outlier_mask], color=outlier_color, label='IQR Outliers', marker=outlier_marker)
+    ax.plot(osm, slope * osm + intercept, 'r-', lw=2, label=f'{dist_obj.name.title()} Fit')
+
+    ax.set_title(title or f'QQ Plot ({column}) vs. {dist_obj.name.title()}')
+    ax.set_xlabel('Theoretical Quantiles')
+    ax.set_ylabel('Sample Quantiles')
+    ax.legend()
+    ax.grid(True)
+
+    # Perform all 3 normality tests
+    shapiro_stat, shapiro_p = stats.shapiro(values)
+    dagostino_stat, dagostino_p = stats.normaltest(values)
+    ad_result = stats.anderson(values, dist='norm')
+    ad_stat = ad_result.statistic
+    ad_crit = ad_result.critical_values[2]  # 5% level
+
+    # Build results table
+    html = f"""
+    <h4>Normality Tests for <code>{column}</code> (n={n})</h4>
+    <table border="1" style="border-collapse:collapse; text-align:center;">
+    <tr>
+        <th>Test</th>
+        <th>Statistic</th>
+        <th>p-value / Critical</th>
+        <th>Conclusion</th>
+        <th>Recommended for</th>
+        <th>Sensitive to</th>
+    </tr>
+    """
+
+    conclusion_sw = "Reject H₀ (Not Normal)" if shapiro_p < 0.05 else "Fail to Reject H₀ (Possibly Normal)"
+    html += f"<tr><td>Shapiro-Wilk</td><td>{shapiro_stat:.4f}</td><td>{shapiro_p:.4f}</td><td>{conclusion_sw}</td><td>n ≤ 5000</td><td>General deviations</td></tr>"
+
+    conclusion_dp = "Reject H₀ (Not Normal)" if dagostino_p < 0.05 else "Fail to Reject H₀ (Possibly Normal)"
+    html += f"<tr><td>D’Agostino-Pearson</td><td>{dagostino_stat:.4f}</td><td>{dagostino_p:.4f}</td><td>{conclusion_dp}</td><td>n > 500</td><td>Skewness & Kurtosis</td></tr>"
+
+    conclusion_ad = "Reject H₀ (Not Normal)" if ad_stat > ad_crit else "Fail to Reject H₀ (Possibly Normal)"
+    html += f"<tr><td>Anderson-Darling</td><td>{ad_stat:.4f}</td><td>Crit: {ad_crit:.4f}</td><td>{conclusion_ad}</td><td>All sample sizes</td><td>Tail behavior</td></tr>"
+
+    html += "</table>"
+
+    display(HTML(html))
+
+# Plot horizontal boxplot
+# plot_horizontal_boxplot(df, 'column_name')
+def plot_horizontal_boxplot(data, column, figsize=(15, 5), box_color='lightgrey',
+                       point_color='black', outlier_color='red',
+                       point_marker='.', outlier_marker='x'):
+    """
+    Horizontal boxplot with aligned markers:
+    - Points, outliers and mean marker are aligned with whiskers (y=1).
+    - Red diamond shows mean.
+    - Annotates mean, median, and IQR-based outlier thresholds.
+
+    Parameters:
+    - data: pd.DataFrame – DataFrame containing the column to plot.
+    - column: str – Column name to visualize.
+    - figsize: tuple – Size of the figure (width, height).
+    - box_color: str – Color of the boxplot.
+    - point_color: str – Color of non-outlier data points.
+    - outlier_color: str – Color of outlier points.
+    - point_marker: str – Marker style for regular data points.
+    - outlier_marker: str – Marker style for outliers.
+
+    Returns:
+    - fig, ax – Matplotlib figure and axis.
+    """
+
+    values = data[column].dropna().values
+
+    # Compute statistics
+    Q1 = np.percentile(values, 25)
+    Q3 = np.percentile(values, 75)
+    IQR = Q3 - Q1
+    lower_bound = Q1 - 1.5 * IQR
+    upper_bound = Q3 + 1.5 * IQR
+    mean_val = np.mean(values)
+    median_val = np.median(values)
+
+    # Identify outliers
+    outliers = values[(values < lower_bound) | (values > upper_bound)]
+    non_outliers = values[(values >= lower_bound) & (values <= upper_bound)]
+
+    # Initialize plot
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.boxplot(values, vert=False, patch_artist=True,
+               boxprops=dict(facecolor=box_color, color='black'),
+               medianprops=dict(color='blue'),
+               whiskerprops=dict(color='red'),
+               capprops=dict(color='black'),
+               flierprops=dict(marker='', linestyle='none'))  # custom outliers only
+
+    # Plot all data at y=1 (aligned with boxplot)
+    ax.scatter(non_outliers, np.full_like(non_outliers, 1), color=point_color,
+               marker=point_marker, label='Data Points', zorder=3)
+    ax.scatter(outliers, np.full_like(outliers, 1), color=outlier_color,
+               marker=outlier_marker, label='IQR Outliers', zorder=4)
+    ax.scatter(mean_val, 1, color='red', marker='D', s=70, label='Mean', zorder=5)
+
+    # Annotations
+    ax.annotate(f"Mean = {mean_val:.2f}", xy=(mean_val, 1), xytext=(0, 12),
+                textcoords='offset points', ha='center', color='red', fontsize=7, weight='bold')
+    ax.annotate(f"Median = {median_val:.2f}", xy=(median_val, 1), xytext=(0, 20),
+                textcoords='offset points', ha='center', color='blue', fontsize=7)
+    ax.annotate(f"← Outlier threshold = {lower_bound:.2f}", xy=(lower_bound, 1), xytext=(-5, -15),
+                textcoords='offset points', ha='right', color='crimson', fontsize=7)
+    ax.annotate(f"Outlier threshold = {upper_bound:.2f} →", xy=(upper_bound, 1), xytext=(5, -15),
+                textcoords='offset points', ha='left', color='crimson', fontsize=7)
+
+    # Styling
+    ax.set_yticks([])
+    ax.set_ylim(0.9, 1.1)  # Keep everything centered around y=1
+    ax.set_title(f'Boxplot with Stats: {column}', fontsize=11, weight='bold')
+    ax.grid(True, axis='x', linestyle='--', alpha=0.5)
+    ax.legend()
+
+# ---
+
+# Theoretical distributions and their parameters in scipy.stats for QQ plot
+
+# | Distribution (`scipy.stats`) | Required `dist_params`  | Parameter meaning                                    | When to use it                                                               |
+# | ---------------------------- | ----------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------- |
+# | `norm`                       | ❌ None                  | Defaults: `loc=0`, `scale=1`                         | When data appears **symmetric and bell-shaped** (normal)                     |
+# | `lognorm`                    | ✅ `(shape, loc, scale)` | `shape` = log-σ, `loc` = shift, `scale` = median-ish | For **right-skewed**, strictly **positive** data (e.g., income, price, time) |
+# | `expon`                      | ✅ `(loc, scale)`        | `loc` = start point, `scale` = mean                  | For **time between events**, **rapid decay** (e.g., Poisson processes)       |
+# | `gamma`                      | ✅ `(a, loc, scale)`     | `a` = shape parameter, controls skewness             | For **right-skewed data**, but more flexible than log-normal                 |
+# | `beta`                       | ✅ `(a, b, loc, scale)`  | `a`, `b` = shape params, `loc/scale` = range (0–1)   | For **bounded data**, such as **proportions** or percentages                 |
+# | `chi2`                       | ✅ `(df, loc, scale)`    | `df` = degrees of freedom                            | For **variance**, squared errors, or **sum of squares**                      |
+# | `weibull_min`                | ✅ `(c, loc, scale)`     | `c` = shape parameter                                | For **lifetimes**, **failure analysis**, survival modeling                   |
+# | `uniform`                    | ✅ `(loc, scale)`        | `loc` = minimum, `scale` = range                     | For data **evenly distributed** across a range (rare in real-world data)     |
+# | `t` (Student's t)            | ✅ `(df, loc, scale)`    | `df` = degrees of freedom                            | Like normal, but **fatter tails** — useful for **small samples**             |
+
 # ---
 
 # Best practices for choosing "cmaps"
@@ -1049,3 +1388,15 @@ def plot_horizontal_lines(df, start_col='', end_col='', y_col='', title='', xlab
 
 # - Miscellaneous / Special-use
 #   flag, prism, ocean, gist_earth, terrain, gist_stern, gnuplot, gnuplot2, CMRmap, cubehelix, brg, gist_rainbow, rainbow, jet, turbo, nipy_spectral, gist_ncar
+
+# ---
+
+# Distribution	            Suggested Method
+# ------------              ----------------
+# Normal                	Sturges, Ideal for approximately normal distributions.
+#                           Scott, 
+#                           Rice, when there is a lot of data and you want more stable bins, Large n, smooth distributions
+# Samll n             	    Square Root, Simple and quick. A good starting point.
+# with outliers	            Freedman–Diaconis, Excellent for data with outliers. Uses the interquartile range (IQR).
+# No idea	                bins='auto'
+
